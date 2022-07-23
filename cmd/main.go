@@ -4,6 +4,8 @@ import (
 	"os"
 	"log"
 	"database/sql"
+
+	_ "github.com/SAP/go-hdb/driver"
 )
 
 func main() {
