@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-kyma-user-api
+  namespace: go-user-api
+  labels:
+    app: go-kyma-user-api
+  annotations:
+    prometheus.io/scrape: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-kyma-user-api
+  template:
+    metadata:
+      labels:
+        app: go-kyma-user-api
+    spec:
+      containers:
+        - name: go-kyma-user-api
+          image: docker.io/kadirozgur/go-kyma-user-api:latest
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: app-secret
+          ports:
+            - name: http
+              protocol: TCP
+              containerPort: 8080
+          volumeMounts:
+            - name: secret-volume
+              readOnly: true
+              mountPath: "/etc/secret-volume"
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: app-secret

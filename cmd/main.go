@@ -1,12 +1,18 @@
 package main
 
 import (
-	"os"
-	"log"
 	"database/sql"
+	"log"
+	"net/http"
+	"os"
 
 	_ "github.com/SAP/go-hdb/driver"
+	"github.com/gin-gonic/gin"
+
+	"go-kyma-user-api/internal/user"
 )
+
+var dbConn *sql.DB
 
 func main() {
 
@@ -14,12 +20,24 @@ func main() {
 	if dbConnectionError != nil {
 		log.Fatalln(dbConnectionError)
 		return
+	} else {
+		log.Println("Successfully connected to hdb!!!")
 	}
- 
+
+	router := setupRouter()
+	router.Run(":8080")
+
+	defer dbConn.Close()
 }
 
+func setupRouter() *gin.Engine {
+	r := gin.Default()
+	r.GET("/users", getUsers)
 
-func connectToHanaDB() (error){
+	return r
+}
+
+func connectToHanaDB() error {
 	user := os.Getenv("HDB_USER")
 	password := os.Getenv("HDB_PASSWORD")
 	host := os.Getenv("HDB_HOST")
@@ -33,11 +51,37 @@ func connectToHanaDB() (error){
 		return err
 	}
 
-    pingErr := db.Ping()
-    if pingErr != nil {
-        log.Fatal(pingErr)
+	dbConn = db
+
+	pingErr := dbConn.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
 		return err
-    }
-    //fmt.Println("Connected!")
+	}
 	return nil
+}
+
+func getUsers(c *gin.Context) {
+	var users []user.User
+	var user user.User
+
+	log.Println("Execute DB Query!")
+	rows, err := dbConn.Query("SELECT USERNAME, EMAIL, FIRSTNAME, LASTNAME, ADDRESS, MOBILE from USERAPI.USER")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		if err := rows.Scan(&user.UserName, &user.Email, &user.FirstName,
+			&user.LastName, &user.Address, &user.Mobile); err != nil {
+			return
+		}
+
+		users = append(users, user)
+	}
+
+	c.IndentedJSON(http.StatusOK, users)
 }
