@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	_ "github.com/SAP/go-hdb/driver"
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,7 @@ func main() {
 func setupRouter() *gin.Engine {
 	r := gin.Default()
 	r.GET("/users", getUsers)
+	r.POST("/users", createUser)
 
 	return r
 }
@@ -65,7 +67,7 @@ func getUsers(c *gin.Context) {
 	var users []user.User
 	var user user.User
 
-	log.Println("Execute DB Query!")
+	log.Println("Execute Select Query!")
 	rows, err := dbConn.Query("SELECT USERNAME, EMAIL, FIRSTNAME, LASTNAME, ADDRESS, MOBILE from USERAPI.USER")
 	if err != nil {
 		log.Println(err)
@@ -84,4 +86,35 @@ func getUsers(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, users)
+}
+
+func createUser(c *gin.Context) {
+
+	var user user.User
+
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest,
+			gin.H{
+				"error":   "JSON Binding Error",
+				"message": "Invalid JSON!"})
+		return
+	}
+
+	log.Println("Execute Create Query!")
+
+	insertStatement, err := dbConn.Prepare("INSERT INTO USERAPI.USER (USERNAME, EMAIL, FIRSTNAME, LASTNAME, ADDRESS, MOBILE) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer insertStatement.Close()
+
+	result, err := insertStatement.Exec(user.UserName, user.Email, user.FirstName, user.LastName, user.Address, user.Mobile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	insertedID, err := result.LastInsertId()
+
+	c.IndentedJSON(http.StatusOK, "User"+strconv.FormatInt(insertedID, 64)+" Created!")
 }
