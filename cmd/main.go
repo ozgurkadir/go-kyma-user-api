@@ -15,6 +15,10 @@ import (
 
 var dbConn *sql.DB
 
+type DelStruct struct {
+	UserName string `uri:"userName" binding:"required"`
+}
+
 func main() {
 
 	dbConnectionError := connectToHanaDB()
@@ -35,6 +39,7 @@ func setupRouter() *gin.Engine {
 	r := gin.Default()
 	r.GET("/users", getUsers)
 	r.POST("/users", createUser)
+	r.DELETE("/users/:userName", deleteUser)
 
 	return r
 }
@@ -76,14 +81,19 @@ func getUsers(c *gin.Context) {
 
 	defer rows.Close()
 
+	log.Println("ROWWS!")
+
 	for rows.Next() {
 		if err := rows.Scan(&user.UserName, &user.Email, &user.FirstName,
 			&user.LastName, &user.Address, &user.Mobile); err != nil {
+			log.Println(err)
 			return
 		}
 
 		users = append(users, user)
 	}
+
+	log.Println("USEERRS!")
 
 	c.IndentedJSON(http.StatusOK, users)
 }
@@ -117,4 +127,35 @@ func createUser(c *gin.Context) {
 	insertedID, err := result.LastInsertId()
 
 	c.IndentedJSON(http.StatusOK, "User"+strconv.FormatInt(insertedID, 64)+" Created!")
+}
+
+func deleteUser(c *gin.Context) {
+
+	var user DelStruct
+
+	if err := c.ShouldBindUri(&user); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest,
+			gin.H{
+				"error":   "URI Binding Error",
+				"message": "Invalid URI!"})
+		return
+	}
+	deleteStatement, err := dbConn.Prepare("DELETE FROM USERAPI.USER WHERE USERNAME = ?;")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer deleteStatement.Close()
+
+	result, err := deleteStatement.Exec(user.UserName)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		count, err := result.RowsAffected()
+		if err == nil && count > 0 {
+			c.IndentedJSON(http.StatusOK, "User-> "+user.UserName+" deleted!")
+		} else {
+			c.IndentedJSON(http.StatusInternalServerError, "Deletion failed!")
+		}
+	}
 }
